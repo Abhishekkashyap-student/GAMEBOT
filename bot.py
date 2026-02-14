@@ -31,11 +31,27 @@ logger = logging.getLogger(__name__)
 MANAGERS: Dict[int, Dict] = {}
 
 
-BRAND = "AXL BOT\nCREATED BY FIGLETAXL\nJOIN - @vfriendschat"
+BRAND = "🎮 AXL BOT 🎮\n🔥 ADVANCED GAME ECONOMY BOT\n✨ CREATED BY FIGLETAXL\n📢 JOIN - @vfriendschat"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = f"{BRAND}\n\nWelcome to AXL BOT — Group Games Hub!\nUse /help to see available games."
+    text = (
+        f"{BRAND}\n\n"
+        "🎯 Welcome to AXL BOT — Advanced Group Games Hub!\n\n"
+        "🏆 Features:\n"
+        "• 🎮 Multiple Games (Trivia, RPS, Hangman, Slots, etc)\n"
+        "• 💰 Economy System with Rupees (₹)\n"
+        "• 💣 PVP: Kill, Rob, Protect yourself\n"
+        "• 🏅 Leaderboards and Rankings\n"
+        "• 👑 Premium perks and special abilities\n"
+        "• 🎬 Social reactions with GIFs\n\n"
+        "🚀 Quick Start:\n"
+        "/startgames - Initialize games in your group\n"
+        "/help - Show all available commands\n"
+        "/daily - Start earning coins!\n\n"
+        "💬 Use /help for complete command list.\n"
+        "Have fun! 🎉"
+    )
     try:
         if update.message is not None:
             await update.message.reply_text(text)
@@ -50,15 +66,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "Available commands:\n"
-        "/startgames - initialize games in this group\n"
-        "/stopgames - stop games (admin only)\n"
-        "/trivia - start a trivia question\n"
-        "/rps - play rock-paper-scissors\n"
-        "/hangman - start hangman\n"
-        "/hangman_guess <letter> - guess a letter in hangman\n"
-        "/guess - start number-guess (or use /guess <number> to answer)\n"
-        "/help - this message\n"
+        "🎮 AXL BOT — Group Games Hub 🎮\n"
+        "=" * 40 + "\n\n"
+        "🎯 GAMES:\n"
+        "/startgames - Initialize games in this group\n"
+        "/stopgames - Stop games (admin only)\n"
+        "/trivia - Start a trivia question\n"
+        "/rps - Play rock-paper-scissors\n"
+        "/hangman - Start hangman\n"
+        "/hangman_guess <letter> - Guess a letter\n"
+        "/guess - Start number-guess (1-50)\n\n"
+        "💰 ECONOMY & CURRENCY (₹):\n"
+        "/daily - Claim 500 ₹ (24h cooldown)\n"
+        "/balance, /bal - Check your balance\n"
+        "/send <amount> - Send ₹ to user (reply)\n"
+        "/leaderboard - Top 15 richest players\n\n"
+        "💣 PVP ACTIONS:\n"
+        "/kill - Kill user & get 90-150 ₹ reward (reply)\n"
+        "/dead - Mark user dead (reply)\n"
+        "/revive - Revive dead user (200 ₹)\n"
+        "/steal, /rob - Steal from user (50% success)\n"
+        "/protectme - 24h protection (200 ₹)\n"
+        "/slots <bet> - Play slots (5x jackpot)\n\n"
+        "🎬 REACTIONS:\n"
+        "/slap, /love, /kiss, /hate, /sad (reply)\n\n"
+        "🛠️ ADMIN COMMANDS (Owner only):\n"
+        "/grant <amount> - Grant ₹ to user (reply)\n"
+        "/adminadd <user_id> <amount> - Add ₹ by ID\n"
+        "/setpremium <on|off> - Toggle premium status\n"
     )
     await update.message.reply_text(text)
 
@@ -79,7 +114,7 @@ async def startgames(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     chat_id = update.effective_chat.id
     ensure_chat(chat_id)
-    await update.message.reply_text("AXL BOT games initialized for this chat. Use /help to play.")
+    await update.message.reply_text("🎮 AXL BOT Games initialized!\n✅ Ready to play!\n💬 Use /help for commands.")
 
 
 async def stopgames(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,11 +123,11 @@ async def stopgames(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Require group admin to stop games
     allowed = await is_chat_admin(update, context)
     if not allowed:
-        await update.message.reply_text("Only group admins may stop games.")
+        await update.message.reply_text("⛔ Only group admins may stop games.")
         return
     chat_id = update.effective_chat.id
     MANAGERS.pop(chat_id, None)
-    await update.message.reply_text("AXL BOT games stopped for this chat.")
+    await update.message.reply_text("🛑 AXL BOT games stopped for this chat.")
 
 
 async def trivia_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -161,7 +196,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Unknown command. Use /help to see available commands.")
+    await update.message.reply_text("❌ Unknown command. Use /help to see available commands.")
+
 
 
 def main():
@@ -188,8 +224,10 @@ def main():
     app.add_handler(CommandHandler("leaderboard", economy.cmd_leaderboard))
     app.add_handler(CommandHandler("revive", economy.cmd_revive))
     app.add_handler(CommandHandler("dead", economy.cmd_dead))
+    app.add_handler(CommandHandler("kill", economy.cmd_kill))
     app.add_handler(CommandHandler("protectme", economy.cmd_protectme))
     app.add_handler(CommandHandler("steal", economy.cmd_steal))
+    app.add_handler(CommandHandler("rob", economy.cmd_rob))
     app.add_handler(CommandHandler("slots", economy.cmd_slots))
     # Reactions
     app.add_handler(CommandHandler("slap", react_command))
@@ -198,9 +236,10 @@ def main():
     app.add_handler(CommandHandler("hate", react_command))
     app.add_handler(CommandHandler("sad", react_command))
     # Admin / owner-only
-    from admin import cmd_grant, cmd_setpremium
+    from admin import cmd_grant, cmd_setpremium, cmd_adminadd
     app.add_handler(CommandHandler("grant", cmd_grant))
     app.add_handler(CommandHandler("setpremium", cmd_setpremium))
+    app.add_handler(CommandHandler("adminadd", cmd_adminadd))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
