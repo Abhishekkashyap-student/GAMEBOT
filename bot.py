@@ -193,6 +193,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("rps:"):
         mgr = ensure_chat(chat_id)["rps"]
         await mgr.handle_callback(update, context)
+    elif data.startswith("profile:"):
+        # show user profile from leaderboard
+        await economy.callback_profile(update, context)
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):

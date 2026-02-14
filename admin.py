@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from utils.db import ensure_user, change_balance, set_premium, get_user
+from utils.firebase_db import ensure_user, change_balance, set_premium, get_user
 
 
 def _is_owner(user_id: int) -> bool:

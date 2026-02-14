@@ -1,6 +1,9 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 import random
+import urllib.request
+import urllib.parse
+import json
 
 GIFS = {
     "slap": [
@@ -50,8 +53,53 @@ async def react_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message is None:
         return
     cmd = update.message.text.split()[0].lstrip("/").lower()
+    # Try external free GIF APIs first, then fall back to static list
+    def fetch_random_gif_for(cmd_name: str):
+        # Map command to waifu.pics endpoints
+        waifu_map = {
+            "slap": "slap",
+            "kiss": "kiss",
+            "love": "hug",
+            "hug": "hug",
+            "sad": "cry",
+            "hate": "bonk",
+        }
+        endpoint = waifu_map.get(cmd_name)
+        if endpoint:
+            try:
+                url = f"https://api.waifu.pics/sfw/{urllib.parse.quote(endpoint)}"
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    data = json.load(resp)
+                    if isinstance(data, dict) and data.get("url"):
+                        return data.get("url")
+            except Exception:
+                pass
+
+        # Try Tenor public endpoint as a second fallback
+        try:
+            q = urllib.parse.quote(cmd_name)
+            tenor_key = "LIVDSRZULELA"
+            url = f"https://g.tenor.com/v1/random?q={q}&key={tenor_key}&limit=1"
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                data = json.load(resp)
+                if isinstance(data, dict) and data.get("results"):
+                    res = data["results"][0]
+                    # Try to extract gif url from multiple possible fields
+                    if "media" in res and isinstance(res["media"], list) and res["media"]:
+                        m = res["media"][0]
+                        # find any url-like field
+                        for v in (m.get("gif"), m.get("mediumgif"), m.get("tinygif")):
+                            if isinstance(v, dict) and v.get("url"):
+                                return v.get("url")
+                    if res.get("url"):
+                        return res.get("url")
+        except Exception:
+            pass
+
+        return None
+
     gifs = GIFS.get(cmd, [])
-    gif = random.choice(gifs) if gifs else None
+    gif = fetch_random_gif_for(cmd) or (random.choice(gifs) if gifs else None)
     emoji = EMOJIS.get(cmd, "✨")
     target = None
     if update.message.reply_to_message:

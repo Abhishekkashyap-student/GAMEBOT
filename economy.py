@@ -2,10 +2,10 @@ import time
 import random
 from typing import Optional
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from utils.db import (
+from utils.firebase_db import (
     init_db,
     ensure_user,
     get_user,
@@ -153,7 +153,8 @@ async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not rows:
         await update.message.reply_text("📊 No users in database yet. Play /daily to start!")
         return
-
+    # Build inline keyboard: each user is a button that opens a profile callback
+    keyboard = []
     text = "🏆 TOP 15 RICHEST PLAYERS 🏆\n" + "=" * 55 + "\n\n"
     pos = 1
     for r in rows:
@@ -161,16 +162,47 @@ async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance = r["balance"]
         is_dead = "💀" if r["is_dead"] else "✅"
         is_premium = "👑" if r["is_premium"] else ""
-        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else "  "
+        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else ""
 
-        text += f"{medal} #{pos} | <b>{username}</b>\n"
-        text += f"    💰 {balance} ₹ | {is_dead} {is_premium}\n"
-        text += f"    🆔 {r['user_id']}\n"
-        if pos < 15:
-            text += "\n"
+        line = f"{medal} #{pos} — {username} — {balance} ₹ {is_dead} {is_premium}"
+        # add a button per user to view profile
+        keyboard.append([InlineKeyboardButton(text=line, callback_data=f"profile:{r['user_id']}")])
         pos += 1
 
-    await update.message.reply_text(text, parse_mode="HTML")
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+async def callback_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query is None:
+        return
+    data = query.data or ""
+    if not data.startswith("profile:"):
+        return
+    try:
+        user_id = int(data.split(":", 1)[1])
+    except Exception:
+        await query.answer("Invalid user id", show_alert=True)
+        return
+    user = get_user(user_id)
+    if not user:
+        await query.answer("User not found", show_alert=True)
+        return
+    username = user.get("username") or f"anonyme_user_{user_id}"
+    bal = user.get("balance", 0)
+    dead_status = "💀 DEAD" if user.get("is_dead") else "✅ ALIVE"
+    premium_tag = "👑 PREMIUM" if user.get("is_premium") else "⭕ REGULAR"
+
+    text = (
+        f"👤 <b>{username}</b>\n"
+        f"🆔 ID: {user_id}\n"
+        f"💼 Balance: <b>{bal} ₹</b>\n"
+        f"Status: {dead_status} | {premium_tag}"
+    )
+
+    # Answer callback with a modal alert containing profile info
+    await query.answer(text, show_alert=True)
 
 
 async def cmd_revive(update: Update, context: ContextTypes.DEFAULT_TYPE):

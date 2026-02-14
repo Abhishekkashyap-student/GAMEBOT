@@ -8,6 +8,15 @@ services:
         value: "${BOT_TOKEN}"
       - name: OWNER_ID
         value: "${OWNER_ID}"
+      - name: FIREBASE_PROJECT_ID
+        value: "${FIREBASE_PROJECT_ID}"
+      - name: FIREBASE_PRIVATE_KEY
+        value: "${FIREBASE_PRIVATE_KEY}"
+      - name: FIREBASE_CLIENT_EMAIL
+        value: "${FIREBASE_CLIENT_EMAIL}"
     cpu: 0.25
     memory: 256
     ports: []
+    instances:
+      min: 1
+      max: 1
