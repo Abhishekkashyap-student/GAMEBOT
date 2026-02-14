@@ -1,5 +1,6 @@
 import os
 import logging
+from . import db as local_db  # Always import local db for fallback
 
 logger = logging.getLogger(__name__)
 
@@ -7,11 +8,11 @@ logger = logging.getLogger(__name__)
 FIREBASE_AVAILABLE = True
 try:
     import firebase_admin
-    from firebase_admin import credentials, db
+    from firebase_admin import credentials, db as firebase_db
 except Exception:  # pragma: no cover - fallback path used in tests/environments without firebase
     FIREBASE_AVAILABLE = False
     logger.warning("firebase_admin not available; falling back to local sqlite DB via utils.db")
-    from . import db as local_db  # type: ignore
+    firebase_db = None
 
 
 # Firebase configuration from environment variables
@@ -46,7 +47,7 @@ if FIREBASE_AVAILABLE:
 def ensure_user(user_id: int, username: str | None = None):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             user_data = user_ref.get()
 
             if user_data is None:
@@ -70,7 +71,7 @@ def ensure_user(user_id: int, username: str | None = None):
 def get_user(user_id: int):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             data = user_ref.get()
             if data:
                 return {**data, "user_id": user_id}
@@ -89,7 +90,7 @@ def get_user(user_id: int):
 def change_balance(user_id: int, delta: int):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             user_data = user_ref.get()
 
             if user_data is None:
@@ -116,8 +117,8 @@ def transfer(sender_id: int, recipient_id: int, amount: int) -> bool:
         if amount <= 0:
             return False
         try:
-            sender_ref = db.reference(f"users/{sender_id}")
-            recipient_ref = db.reference(f"users/{recipient_id}")
+            sender_ref = firebase_db.reference(f"users/{sender_id}")
+            recipient_ref = firebase_db.reference(f"users/{recipient_id}")
 
             ensure_user(sender_id)
             ensure_user(recipient_id)
@@ -145,7 +146,7 @@ def transfer(sender_id: int, recipient_id: int, amount: int) -> bool:
 def claim_daily(user_id: int, amount: int, now_ts: int) -> bool:
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             user_data = user_ref.get()
 
             if user_data is None:
@@ -170,7 +171,7 @@ def claim_daily(user_id: int, amount: int, now_ts: int) -> bool:
 def set_premium(user_id: int, premium: bool):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             ensure_user(user_id)
             user_ref.update({"is_premium": 1 if premium else 0})
         except Exception as e:
@@ -196,7 +197,7 @@ def is_premium(user_id: int) -> bool:
 def set_dead(user_id: int, dead: bool):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             ensure_user(user_id)
             user_ref.update({"is_dead": 1 if dead else 0})
         except Exception as e:
@@ -208,7 +209,7 @@ def set_dead(user_id: int, dead: bool):
 def set_protect(user_id: int, until_ts: int):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             ensure_user(user_id)
             user_ref.update({"protect_until": int(until_ts)})
         except Exception as e:
@@ -220,7 +221,7 @@ def set_protect(user_id: int, until_ts: int):
 def set_last_daily(user_id: int, ts: int):
     if FIREBASE_AVAILABLE:
         try:
-            user_ref = db.reference(f"users/{user_id}")
+            user_ref = firebase_db.reference(f"users/{user_id}")
             ensure_user(user_id)
             user_ref.update({"last_daily": int(ts)})
         except Exception as e:
@@ -232,7 +233,7 @@ def set_last_daily(user_id: int, ts: int):
 def top_users(limit: int = 15):
     if FIREBASE_AVAILABLE:
         try:
-            users_ref = db.reference("users")
+            users_ref = firebase_db.reference("users")
             all_users = users_ref.get()
 
             if not all_users:
@@ -275,7 +276,7 @@ def register_group(group_id: int, group_name: str = None):
     """Register a group"""
     if FIREBASE_AVAILABLE:
         try:
-            group_ref = db.reference(f"groups/{group_id}")
+            group_ref = firebase_db.reference(f"groups/{group_id}")
             group_ref.set({
                 "group_id": group_id,
                 "group_name": group_name or f"Group_{group_id}",
@@ -293,7 +294,7 @@ def is_group_registered(group_id: int) -> bool:
     """Check if group is registered"""
     if FIREBASE_AVAILABLE:
         try:
-            group_ref = db.reference(f"groups/{group_id}")
+            group_ref = firebase_db.reference(f"groups/{group_id}")
             data = group_ref.get()
             return data is not None and data.get("is_active", 0) == 1
         except Exception as e:
@@ -307,7 +308,7 @@ def unregister_group(group_id: int):
     """Unregister a group"""
     if FIREBASE_AVAILABLE:
         try:
-            group_ref = db.reference(f"groups/{group_id}")
+            group_ref = firebase_db.reference(f"groups/{group_id}")
             group_ref.update({"is_active": 0})
         except Exception as e:
             logger.error(f"Error unregistering group (firebase): {e}")
@@ -320,7 +321,7 @@ def get_all_registered_groups():
     """Get all active groups"""
     if FIREBASE_AVAILABLE:
         try:
-            groups_ref = db.reference("groups")
+            groups_ref = firebase_db.reference("groups")
             all_groups = groups_ref.get()
             if not all_groups:
                 return []
