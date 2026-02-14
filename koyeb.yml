@@ -1,0 +1,13 @@
+# Example Koyeb app manifest (build from repository or image)
+name: axl-bot
+services:
+  - name: bot
+    image: quay.io/your-username/axl-bot:latest # build & push image, then set here
+    envs:
+      - name: BOT_TOKEN
+        value: "${BOT_TOKEN}"
+      - name: OWNER_ID
+        value: "${OWNER_ID}"
+    cpu: 0.25
+    memory: 256
+    ports: []
