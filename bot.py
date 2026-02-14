@@ -164,7 +164,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Unknown command. Use /help to see available commands.")
 
 
-async def main():
+def main():
     token = os.environ.get("BOT_TOKEN")
     if not token:
         print("Error: set BOT_TOKEN environment variable before running.")
@@ -208,7 +208,7 @@ async def main():
     economy.setup()
     try:
         # run_polling handles initialize/start/polling and shutdown cleanly
-        await app.run_polling()
+        app.run_polling()
     except (KeyboardInterrupt, SystemExit):
         logger.info("AXL BOT stopped by signal")
     except Exception:
@@ -217,6 +217,6 @@ async def main():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        main()
     except (KeyboardInterrupt, SystemExit):
         print("AXL BOT stopped")
