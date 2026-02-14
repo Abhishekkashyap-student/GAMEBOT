@@ -266,3 +266,75 @@ def init_db():
         logger.info("Firebase database initialized")
     else:
         local_db.init_db()
+
+# ═══════════════════════════════════════════════════════════════
+# GROUP MANAGEMENT FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
+def register_group(group_id: int, group_name: str = None):
+    """Register a group"""
+    if FIREBASE_AVAILABLE:
+        try:
+            group_ref = db.reference(f"groups/{group_id}")
+            group_ref.set({
+                "group_id": group_id,
+                "group_name": group_name or f"Group_{group_id}",
+                "registered_at": int(time.time()),
+                "is_active": 1,
+            })
+        except Exception as e:
+            logger.error(f"Error registering group (firebase): {e}")
+            local_db.register_group(group_id, group_name)
+    else:
+        local_db.register_group(group_id, group_name)
+
+
+def is_group_registered(group_id: int) -> bool:
+    """Check if group is registered"""
+    if FIREBASE_AVAILABLE:
+        try:
+            group_ref = db.reference(f"groups/{group_id}")
+            data = group_ref.get()
+            return data is not None and data.get("is_active", 0) == 1
+        except Exception as e:
+            logger.error(f"Error checking group (firebase): {e}")
+            return local_db.is_group_registered(group_id)
+    else:
+        return local_db.is_group_registered(group_id)
+
+
+def unregister_group(group_id: int):
+    """Unregister a group"""
+    if FIREBASE_AVAILABLE:
+        try:
+            group_ref = db.reference(f"groups/{group_id}")
+            group_ref.update({"is_active": 0})
+        except Exception as e:
+            logger.error(f"Error unregistering group (firebase): {e}")
+            local_db.unregister_group(group_id)
+    else:
+        local_db.unregister_group(group_id)
+
+
+def get_all_registered_groups():
+    """Get all active groups"""
+    if FIREBASE_AVAILABLE:
+        try:
+            groups_ref = db.reference("groups")
+            all_groups = groups_ref.get()
+            if not all_groups:
+                return []
+            return [
+                {"group_id": int(gid), "group_name": g.get("group_name", f"Group_{gid}")}
+                for gid, g in all_groups.items()
+                if g.get("is_active", 0) == 1
+            ]
+        except Exception as e:
+            logger.error(f"Error getting groups (firebase): {e}")
+            return local_db.get_all_registered_groups()
+    else:
+        return local_db.get_all_registered_groups()
+
+
+# Import time for timestamps
+import time

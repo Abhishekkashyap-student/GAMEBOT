@@ -36,6 +36,18 @@ def init_db():
         cols = [r[1] for r in cur.fetchall()]
         if "is_premium" not in cols:
             cur.execute("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0")
+        
+        # Create groups table for persistent registration
+        cur.execute(
+            """
+        CREATE TABLE IF NOT EXISTS groups (
+            group_id INTEGER PRIMARY KEY,
+            group_name TEXT,
+            registered_at INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1
+        )
+        """
+        )
         conn.commit()
         conn.close()
 
@@ -185,6 +197,58 @@ def top_users(limit: int = 15):
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("SELECT user_id, username, balance, is_dead, is_premium FROM users ORDER BY balance DESC LIMIT ?", (limit,))
+        rows = cur.fetchall()
+        conn.close()
+        return rows
+
+# ═══════════════════════════════════════════════════════════════
+# GROUP MANAGEMENT FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
+def register_group(group_id: int, group_name: str = None):
+    """Register a group for persistent storage"""
+    with _lock:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM groups WHERE group_id = ?", (group_id,))
+        if cur.fetchone() is None:
+            cur.execute(
+                "INSERT INTO groups (group_id, group_name, registered_at, is_active) VALUES (?, ?, ?, ?)",
+                (group_id, group_name or f"Group_{group_id}", int(time.time()), 1)
+            )
+        else:
+            cur.execute("UPDATE groups SET is_active = 1 WHERE group_id = ?", (group_id,))
+        conn.commit()
+        conn.close()
+
+
+def is_group_registered(group_id: int) -> bool:
+    """Check if a group is registered"""
+    with _lock:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT is_active FROM groups WHERE group_id = ?", (group_id,))
+        row = cur.fetchone()
+        conn.close()
+        return row is not None and row["is_active"] == 1
+
+
+def unregister_group(group_id: int):
+    """Unregister a group"""
+    with _lock:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE groups SET is_active = 0 WHERE group_id = ?", (group_id,))
+        conn.commit()
+        conn.close()
+
+
+def get_all_registered_groups():
+    """Get all active registered groups"""
+    with _lock:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT group_id, group_name FROM groups WHERE is_active = 1")
         rows = cur.fetchall()
         conn.close()
         return rows
