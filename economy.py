@@ -81,52 +81,96 @@ async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user is None:
         return
     row = get_user(user.id)
+    if row is None:
+        await update.message.reply_text("❌ User not found in database")
+        return
     bal = row["balance"]
     dead_status = "💀 DEAD" if row["is_dead"] else "✅ ALIVE"
-    await update.message.reply_text(f"💼 {user.mention_html()} Balance: {bal} ₹\nStatus: {dead_status}", parse_mode="HTML")
+    premium_tag = "👑 PREMIUM" if row["is_premium"] else "⭕ REGULAR"
+    await update.message.reply_text(
+        f"👤 {user.mention_html()}\n"
+        f"💼 Balance: <b>{bal} ₹</b>\n"
+        f"Status: {dead_status} | {premium_tag}\n"
+        f"🆔 ID: {user.id}",
+        parse_mode="HTML"
+    )
 
 
 async def cmd_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_called_user(update)
     if update.message is None or update.message.reply_to_message is None:
-        await update.message.reply_text("💸 Usage: Reply to a user with /send <amount>")
+        await update.message.reply_text(
+            "💸 TRANSFER COINS 💸\n\n"
+            "Usage: Reply to a user + /send <amount>\n"
+            "Example: (reply to user) /send 100"
+        )
         return
     try:
         amount = int(context.args[0])
-    except Exception:
+    except (IndexError, ValueError):
         await update.message.reply_text("💸 Usage: /send <amount> (reply to user)")
         return
     sender = update.effective_user
     if sender is None:
         return
     if amount <= 0:
-        await update.message.reply_text("❌ Invalid amount")
+        await update.message.reply_text("❌ Amount must be greater than 0!")
         return
     ensure_user(sender.id, sender.username)
     recipient = update.message.reply_to_message.from_user
     ensure_user(recipient.id, recipient.username)
+
+    sender_row = get_user(sender.id)
+    if sender_row["balance"] < amount:
+        await update.message.reply_text(
+            f"❌ Insufficient balance!\n"
+            f"You have: {sender_row['balance']} ₹\n"
+            f"Transfer amount: {amount} ₹"
+        )
+        return
+
     ok = transfer(sender.id, recipient.id, amount)
     if not ok:
-        await update.message.reply_text("❌ Insufficient funds or transfer failed.")
+        await update.message.reply_text("❌ Transfer failed. Try again.")
         return
-    await update.message.reply_text(f"💳 Sent {amount} ₹ to {recipient.mention_html()}", parse_mode="HTML")
+
+    sender_new_balance = get_user(sender.id)["balance"]
+    recipient_new_balance = get_user(recipient.id)["balance"]
+
+    await update.message.reply_text(
+        f"💳 TRANSFER SUCCESSFUL! 💳\n"
+        f"👤 From: {sender.mention_html()}\n"
+        f"👤 To: {recipient.mention_html()}\n"
+        f"💰 Amount: {amount} ₹\n\n"
+        f"📊 Your balance: {sender_row['balance']} ₹ → <b>{sender_new_balance} ₹</b>\n"
+        f"📊 Recipient balance: {recipient_new_balance} ₹",
+        parse_mode="HTML"
+    )
 
 
 async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = top_users(15)
-    text = "🏆 TOP 15 RICHEST PLAYERS 🏆\n" + "=" * 50 + "\n\n"
+    if not rows:
+        await update.message.reply_text("📊 No users in database yet. Play /daily to start!")
+        return
+
+    text = "🏆 TOP 15 RICHEST PLAYERS 🏆\n" + "=" * 55 + "\n\n"
     pos = 1
     for r in rows:
-        username = r["username"] or f"User_{r['user_id']}"
+        username = r["username"] if r["username"] else f"anonyme_user_{r['user_id']}"
         balance = r["balance"]
-        is_dead = "💀 DEAD" if r["is_dead"] else "✅ ALIVE"
-        is_premium = "👑 PREMIUM" if r["is_premium"] else ""
-        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"#{pos}"
-        text += f"{medal} {username}\n"
-        text += f"   💰 Balance: {balance} ₹ | {is_dead} {is_premium}\n"
-        text += f"   🆔 ID: {r['user_id']}\n\n"
+        is_dead = "💀" if r["is_dead"] else "✅"
+        is_premium = "👑" if r["is_premium"] else ""
+        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else "  "
+
+        text += f"{medal} #{pos} | <b>{username}</b>\n"
+        text += f"    💰 {balance} ₹ | {is_dead} {is_premium}\n"
+        text += f"    🆔 {r['user_id']}\n"
+        if pos < 15:
+            text += "\n"
         pos += 1
-    await update.message.reply_text(text)
+
+    await update.message.reply_text(text, parse_mode="HTML")
 
 
 async def cmd_revive(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -274,26 +318,63 @@ async def cmd_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     try:
         bet = int(context.args[0])
-    except Exception:
-        await update.message.reply_text("🎰 Usage: /slots <bet_amount>\nExample: /slots 100")
+    except (IndexError, ValueError):
+        await update.message.reply_text(
+            "🎰 SLOTS GAME 🎰\n\n"
+            "Usage: /slots <bet_amount>\n"
+            "Example: /slots 50\n\n"
+            "🎁 Prizes:\n"
+            "🎉 All Match = 5x win!\n"
+            "🥳 Two Match = 2x win!\n"
+            "😢 No Match = Lose bet\n\n"
+            "Emojis: 🍒 🍋 🔔 ⭐ 7️⃣"
+        )
         return
     ensure_user(user.id, user.username)
     row = get_user(user.id)
-    if bet <= 0 or row["balance"] < bet:
-        await update.message.reply_text("❌ Invalid bet or insufficient funds.")
+
+    # Validation
+    if bet <= 0:
+        await update.message.reply_text("❌ Bet must be greater than 0!")
         return
+    if bet > 10000:
+        await update.message.reply_text("❌ Maximum bet is 10000 ₹!")
+        return
+    if row["balance"] < bet:
+        await update.message.reply_text(
+            f"❌ Insufficient balance!\n"
+            f"You have: {row['balance']} ₹\n"
+            f"Bet required: {bet} ₹\n"
+            f"Use /daily to earn more ₹"
+        )
+        return
+
+    # Emoji effect before bet
+    await update.message.reply_text(
+        f"🎰 Betting {bet} ₹...\n"
+        f"⏳ Spinning the reels... 🎯"
+    )
+
+    # Deduct bet
     change_balance(user.id, -bet)
+
+    # Spin reels
     reels = [random.choice(["🍒", "🍋", "🔔", "⭐", "7️⃣"]) for _ in range(3)]
     text = " | ".join(reels)
-    # win conditions
+    new_balance = get_user(user.id)["balance"]
+
+    # Check win conditions
     if reels[0] == reels[1] == reels[2]:
         win = bet * 5
         change_balance(user.id, win)
         new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n🎉 JACKPOT! 🎉\n"
+            f"🎰 {text} 🎰\n\n"
+            f"🎉🎉🎉 JACKPOT! 🎉🎉🎉\n"
             f"✨ You won {win} ₹ (5x multiplier)!\n"
-            f"💼 Your NEW Balance: {new_balance} ₹",
+            f"💼 Previous Balance: {new_balance - win} ₹\n"
+            f"💰 NEW Balance: <b>{new_balance} ₹</b>\n"
+            f"📈 Profit: +{win - bet} ₹",
             parse_mode="HTML"
         )
     elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
@@ -301,15 +382,23 @@ async def cmd_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
         change_balance(user.id, win)
         new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n🥳 You won {win} ₹ (2x multiplier)!\n"
-            f"💼 Your NEW Balance: {new_balance} ₹",
+            f"🎰 {text} 🎰\n\n"
+            f"🥳 YOU WON! 🥳\n"
+            f"✨ You won {win} ₹ (2x multiplier)!\n"
+            f"💼 Previous Balance: {new_balance - win} ₹\n"
+            f"💰 NEW Balance: <b>{new_balance} ₹</b>\n"
+            f"📈 Profit: +{win - bet} ₹",
             parse_mode="HTML"
         )
     else:
-        new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n😢 You lost {bet} ₹\n"
-            f"💼 Your NEW Balance: {new_balance} ₹",
+            f"🎰 {text} 🎰\n\n"
+            f"😢 You lost!\n"
+            f"❌ Bet lost: {bet} ₹\n"
+            f"💼 Previous Balance: {new_balance + bet} ₹\n"
+            f"💰 NEW Balance: <b>{new_balance} ₹</b>\n"
+            f"📉 Loss: -{bet} ₹\n\n"
+            f"💡 Try /daily to earn more coins!",
             parse_mode="HTML"
         )
 
