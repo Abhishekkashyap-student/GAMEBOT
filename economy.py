@@ -56,13 +56,23 @@ async def cmd_daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Claim daily atomically via DB helper. Premium users bypass cooldown (still credited).
     if is_premium(user.id):
         change_balance(user.id, DAILY_AMOUNT)
-        await update.message.reply_text(f"💰 You've received {DAILY_AMOUNT} ₹! (Premium - No cooldown)")
+        new_balance = get_user(user.id)["balance"]
+        await update.message.reply_text(
+            f"💰 Daily Claim Successful (Premium)!\n"
+            f"✨ +{DAILY_AMOUNT} ₹ (No cooldown)\n"
+            f"💼 Your NEW Balance: {new_balance} ₹"
+        )
         return
     ok = claim_daily(user.id, DAILY_AMOUNT, now)
     if not ok:
-        await update.message.reply_text("⏰ You have already claimed daily. Come back later.")
+        await update.message.reply_text("⏰ You have already claimed daily. Come back in 24 hours!")
         return
-    await update.message.reply_text(f"💰 You've received {DAILY_AMOUNT} ₹!")
+    new_balance = get_user(user.id)["balance"]
+    await update.message.reply_text(
+        f"💰 Daily Claim Successful!\n"
+        f"✨ +{DAILY_AMOUNT} ₹\n"
+        f"💼 Your NEW Balance: {new_balance} ₹"
+    )
 
 
 async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,12 +114,17 @@ async def cmd_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rows = top_users(15)
-    text = "🏆 Top 15 Richest Players 🏆\n" + "=" * 30 + "\n"
+    text = "🏆 TOP 15 RICHEST PLAYERS 🏆\n" + "=" * 50 + "\n\n"
     pos = 1
     for r in rows:
-        uname = r["username"] or str(r["user_id"])
-        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else "  "
-        text += f"{medal} #{pos}. {uname} — {r['balance']} ₹\n"
+        username = r["username"] or f"User_{r['user_id']}"
+        balance = r["balance"]
+        is_dead = "💀 DEAD" if r["is_dead"] else "✅ ALIVE"
+        is_premium = "👑 PREMIUM" if r["is_premium"] else ""
+        medal = "🥇" if pos == 1 else "🥈" if pos == 2 else "🥉" if pos == 3 else f"#{pos}"
+        text += f"{medal} {username}\n"
+        text += f"   💰 Balance: {balance} ₹ | {is_dead} {is_premium}\n"
+        text += f"   🆔 ID: {r['user_id']}\n\n"
         pos += 1
     await update.message.reply_text(text)
 
@@ -137,7 +152,15 @@ async def cmd_revive(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         change_balance(user.id, -REVIVE_COST)
     set_dead(target.id, False)
-    await update.message.reply_text(f"💊 {target.mention_html()} has been revived by {user.mention_html()}!", parse_mode="HTML")
+    reviver_balance = get_user(user.id)["balance"]
+    await update.message.reply_text(
+        f"💊 REVIVE SUCCESSFUL! 💊\n"
+        f"👤 Reviver: {user.mention_html()} (@{user.username})\n"
+        f"🆙 Revived: {target.mention_html()} (@{target.username})\n"
+        f"💳 Cost: -{REVIVE_COST} ₹\n"
+        f"💼 Your NEW Balance: {reviver_balance} ₹",
+        parse_mode="HTML"
+    )
 
 
 async def cmd_dead(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -166,7 +189,13 @@ async def cmd_dead(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🛡️ Target is protected and cannot be killed now.")
         return
     set_dead(target.id, True)
-    await update.message.reply_text(f"⚰️ {target.mention_html()} is now dead (killed by {actor.mention_html()})", parse_mode="HTML")
+    await update.message.reply_text(
+        f"⚰️ DEAD! ⚰️\n"
+        f"👤 Killer: {actor.mention_html()} (@{actor.username})\n"
+        f"💀 Victim: {target.mention_html()} (@{target.username})\n"
+        f"Status: DEAD - Cannot perform actions until revived!",
+        parse_mode="HTML"
+    )
 
 
 async def cmd_protectme(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -184,7 +213,15 @@ async def cmd_protectme(update: Update, context: ContextTypes.DEFAULT_TYPE):
         change_balance(user.id, -PROTECT_COST)
     until = int(time.time()) + 24 * 3600
     set_protect(user.id, until)
-    await update.message.reply_text("🛡️ Protection activated for 24 hours!\n✅ Others cannot kill or steal from you.")
+    new_balance = get_user(user.id)["balance"]
+    await update.message.reply_text(
+        f"🛡️ PROTECTION ACTIVATED! 🛡️\n"
+        f"⏱️ Duration: 24 hours\n"
+        f"✅ You are now PROTECTED!\n"
+        f"❌ Others cannot kill or steal from you\n"
+        f"💳 Cost: -{PROTECT_COST} ₹\n"
+        f"💼 Your NEW Balance: {new_balance} ₹"
+    )
 
 
 async def cmd_steal(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -213,11 +250,21 @@ async def cmd_steal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if random.random() < 0.5:
         ok = transfer(target.id, thief.id, amount)
         if ok:
-            await update.message.reply_text(f"🤑 You stole {amount} ₹ from {target.mention_html()}!", parse_mode="HTML")
+            thief_new_balance = get_user(thief.id)["balance"]
+            target_new_balance = get_user(target.id)["balance"]
+            await update.message.reply_text(
+                f"🤑 ROB SUCCESSFUL! 🤑\n"
+                f"👤 Thief: {thief.mention_html()} (@{thief.username})\n"
+                f"🎯 Victim: {target.mention_html()} (@{target.username})\n"
+                f"💰 Stolen: +{amount} ₹\n"
+                f"💼 Your NEW Balance: {thief_new_balance} ₹\n"
+                f"🏦 Victim Balance: {target_new_balance} ₹",
+                parse_mode="HTML"
+            )
         else:
             await update.message.reply_text("❌ Steal failed (target may have insufficient funds).")
     else:
-        await update.message.reply_text("❌ Steal attempt failed and you got nothing.")
+        await update.message.reply_text("❌ Steal attempt failed! The target caught you red-handed!")
 
 
 async def cmd_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -242,20 +289,27 @@ async def cmd_slots(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if reels[0] == reels[1] == reels[2]:
         win = bet * 5
         change_balance(user.id, win)
+        new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n🎉 JACKPOT! 🎉\n✨ You won {win} ₹ ✨\nTotal balance: {get_user(user.id)['balance']} ₹",
+            f"🎰 {text} 🎰\n\n🎉 JACKPOT! 🎉\n"
+            f"✨ You won {win} ₹ (5x multiplier)!\n"
+            f"💼 Your NEW Balance: {new_balance} ₹",
             parse_mode="HTML"
         )
     elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
         win = bet * 2
         change_balance(user.id, win)
+        new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n🥳 You won {win} ₹!\nTotal balance: {get_user(user.id)['balance']} ₹",
+            f"🎰 {text} 🎰\n\n🥳 You won {win} ₹ (2x multiplier)!\n"
+            f"💼 Your NEW Balance: {new_balance} ₹",
             parse_mode="HTML"
         )
     else:
+        new_balance = get_user(user.id)["balance"]
         await update.message.reply_text(
-            f"🎰 {text} 🎰\n\n😢 You lost {bet} ₹\nBalance: {get_user(user.id)['balance']} ₹",
+            f"🎰 {text} 🎰\n\n😢 You lost {bet} ₹\n"
+            f"💼 Your NEW Balance: {new_balance} ₹",
             parse_mode="HTML"
         )
 
@@ -290,8 +344,13 @@ async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Reward killer with 90-150 rupees
     reward = random.randint(90, 150)
     change_balance(actor.id, reward)
+    killer_balance = get_user(actor.id)["balance"]
     await update.message.reply_text(
-        f"💀 @{actor.username} killed {target.mention_html()}!\n💰 Earned {reward} ₹ as reward!\nNew balance: {get_user(actor.id)['balance']} ₹",
+        f"💀 KILL SUCCESSFUL! 💀\n"
+        f"👤 Killer: {actor.mention_html()} (@{actor.username})\n"
+        f"🎯 Target: {target.mention_html()} (@{target.username})\n"
+        f"💰 Reward: +{reward} ₹\n"
+        f"💼 Your NEW Balance: {killer_balance} ₹",
         parse_mode="HTML"
     )
 

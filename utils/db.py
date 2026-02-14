@@ -184,7 +184,7 @@ def top_users(limit: int = 15):
     with _lock:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute("SELECT user_id, username, balance FROM users ORDER BY balance DESC LIMIT ?", (limit,))
+        cur.execute("SELECT user_id, username, balance, is_dead, is_premium FROM users ORDER BY balance DESC LIMIT ?", (limit,))
         rows = cur.fetchall()
         conn.close()
         return rows
