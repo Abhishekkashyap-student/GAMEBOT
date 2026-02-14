@@ -36,7 +36,16 @@ BRAND = "AXL BOT\nCREATED BY FIGLETAXL\nJOIN - @vfriendschat"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"{BRAND}\n\nWelcome to AXL BOT — Group Games Hub!\nUse /help to see available games."
-    await update.message.reply_text(text)
+    try:
+        if update.message is not None:
+            await update.message.reply_text(text)
+            return
+        # fallback if message is missing (e.g., some update types)
+        chat = update.effective_chat
+        if chat is not None:
+            await context.bot.send_message(chat.id, text)
+    except Exception:
+        logger.exception("Failed to send /start response")
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,12 +204,15 @@ async def main():
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
-    print("AXL BOT starting...")
+    logger.info("AXL BOT starting...")
     economy.setup()
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.wait_closed()
+    try:
+        # run_polling handles initialize/start/polling and shutdown cleanly
+        await app.run_polling()
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("AXL BOT stopped by signal")
+    except Exception:
+        logger.exception("Unhandled exception in bot run loop")
 
 
 if __name__ == "__main__":
